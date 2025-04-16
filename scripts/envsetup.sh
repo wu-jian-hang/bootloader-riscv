@@ -1551,7 +1551,8 @@ function clean_rv_firmware()
 
 function build_rv_firmware_bin()
 {
-	RELEASED_NOTE_PATH=$RV_TOP_DIR/bootloader-riscv/release-note
+	local RELEASED_NOTE_PATH=$RV_TOP_DIR/bootloader-riscv/release-note
+	local KEY_PATH=$RV_SCRIPTS_DIR/key
 	build_rv_firmware
 
     	pushd $RV_SCRIPTS_DIR/pack/
@@ -1562,6 +1563,10 @@ function build_rv_firmware_bin()
 
 	pushd $RV_FIRMWARE_INSTALL_DIR
 	rm -f firmware*.bin
+	cp $KEY_PATH/sophgo-root-public-key.pem ./public_key.pem
+	cp $KEY_PATH/sophgo-root-private-key.pem ./private_key.pem
+	cp $RV_SCRIPTS_DIR/sign.sh ./sign
+	openssl rsa -in public_key.pem -pubin -outform der -out public_key.der
 
 	if [ "$CHIP" = "mango" ];then
 		RELEASED_NOTE_MD="$RELEASED_NOTE_PATH/sg2042_release_note.md"
@@ -1584,6 +1589,13 @@ function build_rv_firmware_bin()
 		./pack -a -p zsbl.bin -t 0x80000 -f zsbl.bin -l 0x40000000 firmware.bin
 		./pack -a -p fw_dynamic.bin -t 0x80000 -f fw_dynamic.bin -l 0x80000000 firmware.bin
 		./pack -a -p sg2044-evb.dtbo -t 0x80000 -f sg2044-evb.dtbo -l 0x88000000 firmware.bin
+		source sign SG2044.fd fsbl.bin zsbl.bin fw_dynamic.bin sg2044-evb.dtbo
+		./pack -a -p SG2044.fd.sig -t 0x80000 -f SG2044.fd.sig firmware.bin
+		./pack -a -p fsbl.bin.sig -t 0x80000 -f fsbl.bin.sig firmware.bin
+		./pack -a -p zsbl.bin.sig -t 0x80000 -f zsbl.bin.sig firmware.bin
+		./pack -a -p fw_dynamic.bin.sig -t 0x80000 -f fw_dynamic.bin.sig firmware.bin
+		./pack -a -p sg2044-evb.dtbo.sig -t 0x80000 -f sg2044-evb.dtbo.sig firmware.bin
+		./pack -a -p public_key.der -t 0x80000 -f public_key.der firmware.bin
 	fi
 
 	if [ ! -e "$RELEASED_NOTE_MD" ] || [ ! -s "$RELEASED_NOTE_MD" ];then
@@ -1598,7 +1610,7 @@ function build_rv_firmware_bin()
 		cp firmware.bin image-bmc
 		$RV_SCRIPTS_DIR/gen-tar-for-bmc.sh image-bmc -o obmc-bios.tar.gz -m ast2600-sophgo -v $version -s
 	fi
-	rm -f image-bmc pack *.md
+	rm -f image-bmc pack *.md *key* sign *.sig
 
 	popd
 }
